@@ -14,18 +14,21 @@ class TestIntentResolverUT:
         intent_resolver = IntentResolver()
         yield intent_resolver
 
+    # Parametrization of tests with input for get smell and get smell date
     @pytest.mark.parametrize("intent, entities", [
         (CadocsIntents.GetSmells, ["https://github.com/tensorflow/ranking"]),
         (CadocsIntents.GetSmellsDate, [
          "https://github.com/tensorflow/ranking", "12/12/2022"]),
     ])
     def test_resolve_intent_get_smells_and_date(self, intent_resolver_instance, mocker, intent, entities):
+        # Mock the run method of the ToolSelector class
         mocker.patch.object(ToolSelector, 'run', return_value="Test OK")
 
         result = intent_resolver_instance.resolve_intent(intent, entities)
 
         assert result == "Test OK"
 
+    # Parametrization of tests with input for info and report
     @pytest.mark.parametrize("intent, entities", [
         (CadocsIntents.Info, []),
         (CadocsIntents.Report, []),
@@ -42,6 +45,7 @@ class TestIntentResolverUT:
             }
         }
 
+        # Mock the build_message method of the cadocs_messages module
         mocker.patch(
             'intent_resolver.cadocs_messages.build_cs_message', return_value="Test OK")
         result = intent_resolver_instance.build_message(
@@ -56,6 +60,7 @@ class TestIntentResolverUT:
             }
         }
 
+        # Mock the build_message method of the cadocs_messages module
         mocker.patch(
             'intent_resolver.cadocs_messages.build_cs_message', return_value="Test OK")
         result = intent_resolver_instance.build_message(
@@ -70,6 +75,7 @@ class TestIntentResolverUT:
             }
         }
 
+        # Mock the build_message method of the cadocs_messages module
         mocker.patch(
             'intent_resolver.cadocs_messages.build_report_message', return_value="Test OK")
         result = intent_resolver_instance.build_message(
@@ -84,6 +90,7 @@ class TestIntentResolverUT:
             }
         }
 
+        # Mock the build_message method of the cadocs_messages module
         mocker.patch(
             'intent_resolver.cadocs_messages.build_info_message', return_value="Test OK")
         result = intent_resolver_instance.build_message(
