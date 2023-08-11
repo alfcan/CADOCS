@@ -22,10 +22,13 @@ class TestIntentManager:
             },
             "entities": {}
         }
+        
+        # Mock requests.get method
         mocker.patch('requests.get', return_value=Mock(json=lambda: mock_response))
 
         intent, entities, confidence = intent_manager_instance.detect_intent("can you give me a report?")
 
+        # Assertions
         assert intent == CadocsIntents.Report
         assert entities == []
         assert confidence == 0.8
@@ -40,10 +43,13 @@ class TestIntentManager:
             },
             "entities": {}
         }
+
+        # Mock requests.get method
         mocker.patch('requests.get', return_value=Mock(json=lambda: mock_response))
 
         intent, entities, confidence = intent_manager_instance.detect_intent("tell me more about community smells")
 
+        # Assertions
         assert intent == CadocsIntents.Info
         assert entities == []
         assert confidence == 0.8
@@ -60,10 +66,13 @@ class TestIntentManager:
                 "url": "https://github.com/tensorflow/ranking"
             }
         }
+
+        # Mock requests.get method
         mocker.patch('requests.get', return_value=Mock(json=lambda: mock_response))
 
         intent, entities, confidence = intent_manager_instance.detect_intent("can you get community smells for this repo https://github.com/tensorflow/ranking")
 
+        # Assertions
         assert intent == CadocsIntents.GetSmells
         assert entities == ["https://github.com/tensorflow/ranking"]
         assert confidence == 0.8
@@ -81,10 +90,13 @@ class TestIntentManager:
                 "date": "2022/01/01"
             }
         }
+
+        # Mock requests.get method
         mocker.patch('requests.get', return_value=Mock(json=lambda: mock_response))
 
         intent, entities, confidence = intent_manager_instance.detect_intent("can you get community smells for this repo https://github.com/tensorflow/ranking from 2022/01/01")
 
+        # Assertions
         assert intent == CadocsIntents.GetSmellsDate
         assert entities == ["https://github.com/tensorflow/ranking", "2022/01/01"]
         assert confidence == 0.8
