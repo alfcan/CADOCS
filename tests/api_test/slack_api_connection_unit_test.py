@@ -1,7 +1,9 @@
-from src import slack_api_connection, utils
-from utils import CadocsIntents
+from src.api import slack_api_connection
+from src.service import utils
+from src.intent_handling.cadocs_intents import CadocsIntents
 from flask import Flask, make_response
-from slack_api_connection import app, Cadocs
+from src.api.slack_api_connection import app, CadocsSlack
+from src.chatbot import cadocs_utils
 import json
 import pytest
 import requests
@@ -65,17 +67,16 @@ class TestSlackAPIConnectionUT:
         # Mock the post_waiting_message function
         mock_post_waiting_message = Mock()
         mock_post_waiting_message.do_run = True
-        mocker.patch('src.slack_api_connection.post_waiting_message',
+        mocker.patch('src.api.slack_api_connection.post_waiting_message',
                      return_value=mock_post_waiting_message)
-        # Mock the new_message function of Cadocs class
-        mocker.patch.object(slack_api_connection.Cadocs, "new_message", return_value=(
+        # Mock the new_message function of CadocsSlack class
+        mocker.patch.object(slack_api_connection.CadocsSlack, "new_message", return_value=(
             {"response": "ok"}, "result ok", entities, intent))
         # Mock the chat_postMessage function of slack_web_client
         mocker.patch.object(slack_api_connection.WebClient,
                             "chat_postMessage", return_value="")
-        # Mock the save_execution function of Cadocs class
-        mocker.patch.object(slack_api_connection.Cadocs,
-                            "save_execution", return_value="")
+        # Mock the save_execution function of cadocs_utils file
+        mocker.patch("src.chatbot.cadocs_utils.save_execution", return_value="")
         # Mock the start method of Thread class
         mocker.patch.object(slack_api_connection.threading.Thread,
                             'start', return_value=self.mock_post_attachments)
@@ -105,11 +106,11 @@ class TestSlackAPIConnectionUT:
         # Mock the post_waiting_message function
         mock_progress_message = Mock()
         mock_progress_message.do_run = True
-        mocker.patch('src.slack_api_connection.post_waiting_message',
+        mocker.patch('src.api.slack_api_connection.post_waiting_message',
                      return_value=mock_progress_message)
-        # Mock the new_message function of Cadocs class to make it throw an exception
+        # Mock the new_message function of CadocsSlack class to make it throw an exception
         mock_new_message = Mock(side_effect=Exception("test exception"))
-        mocker.patch.object(slack_api_connection.Cadocs,
+        mocker.patch.object(slack_api_connection.CadocsSlack,
                             "new_message", mock_new_message)
         expected_response = {"message": "false"}
         # Assertions
@@ -129,7 +130,7 @@ class TestSlackAPIConnectionUT:
     def test_get_smells_wrepo_wpat(self, mocker, client, args, expected_url):
         # Mock of the Response object
         mock_response = mocker.Mock(spec=requests.Response)
-        mocker.patch("slack_api_connection.requests.get",
+        mocker.patch("src.api.slack_api_connection.requests.get",
                      return_value=mock_response)
 
         client.get(f"/csDetector/getSmells{args}")
@@ -145,7 +146,7 @@ class TestSlackAPIConnectionUT:
     def test_get_smells_no_repo_no_pat(self, mocker, client, expected_response, args):
         # Mock of the Response object
         mock_response = mocker.Mock(spec=requests.Response)
-        mocker.patch("slack_api_connection.requests.get",
+        mocker.patch("src.api.slack_api_connection.requests.get",
                      return_value=mock_response)
 
         response = client.get(f"/csDetector/getSmells{args}")
@@ -162,7 +163,7 @@ class TestSlackAPIConnectionUT:
         # Mock of the Response object
         mock_response = mocker.Mock(spec=requests.Response)
         mock_response.content = "test_content"
-        mocker.patch("slack_api_connection.requests.get",
+        mocker.patch("src.api.slack_api_connection.requests.get",
                      return_value=mock_response)
 
         response = client.get(
@@ -176,7 +177,7 @@ class TestSlackAPIConnectionUT:
     def test_predict(self, mocker, client):
         # Mock of the Response object
         mock_response = mocker.Mock(spec=requests.Response)
-        mocker.patch("slack_api_connection.requests.get",
+        mocker.patch("src.api.slack_api_connection.requests.get",
                      return_value=mock_response)
 
         client.get("/cadocsNLU/predict?message=hello i'm tester")
@@ -189,7 +190,7 @@ class TestSlackAPIConnectionUT:
     def test_predict_no_message(self, mocker, client):
         # Mock of the Response object
         mock_response = mocker.Mock(spec=requests.Response)
-        mocker.patch("slack_api_connection.requests.get",
+        mocker.patch("src.api.slack_api_connection.requests.get",
                      return_value=mock_response)
 
         response = client.get("/cadocsNLU/predict")
@@ -201,7 +202,7 @@ class TestSlackAPIConnectionUT:
     def test_update_dataset(self, mocker, client):
         # Mock of the Response object
         mock_response = mocker.Mock(spec=requests.Response)
-        mocker.patch("slack_api_connection.requests.get",
+        mocker.patch("src.api.slack_api_connection.requests.get",
                      return_value=mock_response)
 
         client.get(
@@ -216,7 +217,7 @@ class TestSlackAPIConnectionUT:
     def test_update_dataset_no_message_no_intent(self, mocker, client, args):
         # Mock of the Response object
         mock_response = mocker.Mock(spec=requests.Response)
-        mocker.patch("slack_api_connection.requests.get",
+        mocker.patch("src.api.slack_api_connection.requests.get",
                      return_value=mock_response)
 
         response = client.get(f"/cadocsNLU/update{args}")

@@ -1,6 +1,8 @@
-from src import slack_api_connection, utils, cadocs
-from cadocs import Cadocs
-from utils import CadocsIntents
+from src.api import slack_api_connection
+from src.chatbot import cadocs_slack
+from src.service import utils
+from src.chatbot.cadocs_slack import CadocsSlack
+from src.intent_handling.cadocs_intents import CadocsIntents
 import pytest
 import requests
 from unittest.mock import Mock, patch
@@ -41,7 +43,7 @@ class TestSlackAPIConnectionIT:
         mocker.patch.object(slack_api_connection.WebClient,
                             "chat_postMessage", return_value=data_test.get("message"))
 
-        mocker.patch('slack_api_connection.os.environ.get', side_effect=[
+        mocker.patch('src.api.slack_api_connection.os.environ.get', side_effect=[
             "CADOCSNLU_URL_PREDICT", "0.77", "0.55", "0.77", "CSDETECTOR_URL_GETSMELLS"])
 
         response_intent_manager = {
@@ -69,11 +71,11 @@ class TestSlackAPIConnectionIT:
         mock_response_tools.json.return_value = response
 
         # Mock requests.get method
-        mocker.patch("slack_api_connection.requests.get",
+        mocker.patch("api.slack_api_connection.requests.get",
                      side_effect=[mock_response_intent_manager, mock_response_tools])
 
         # Mock os.environ.get method
-        mocker.patch('tools.os.environ.get', side_effect=[
+        mocker.patch('intent_handling.tools.os.environ.get', side_effect=[
             "CADOCSNLU_URL_PREDICT", "0.77", "0.55", "0.77"])
 
         expected_response = {"message": "true"}
