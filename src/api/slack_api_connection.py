@@ -61,6 +61,9 @@ def handle_request(payload):
         "text": event.get("text"),
         "executed": False
     }
+    # Set the language of the message
+    LanguageHandler().detect_language(exec_data.get("text"))
+
     # print(conversation)
     # check wether or not the message has been written by the bot (we dont have to answer) or if the message is valid
     if event.get('bot_id') is None and event.get('user') is not None and exec_data.get("text") != '' and exec_data.get('id') is not None:
