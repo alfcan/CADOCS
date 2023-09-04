@@ -16,6 +16,7 @@ from src.chatbot.cadocs_slack import CadocsSlack
 from src.chatbot import cadocs_utils
 from datetime import date
 from src.intent_handling.cadocs_intents import CadocsIntents
+from src.service.language_handler import LanguageHandler
 from dotenv import load_dotenv
 import time
 load_dotenv('src/.env')
@@ -34,8 +35,6 @@ slack_web_client = WebClient(token=os.environ.get('SLACK_TOKEN', ""))
 cadocs = CadocsSlack()
 
 # This event will fire up every time there is a new message on a chat with the bot invited
-
-
 @slack_events_adapter.on("message")
 def answer(payload):
     # starting a new thread to do the actual processing
@@ -56,13 +55,18 @@ def handle_request(payload):
     print(event)
     print(slack_web_client.auth_test())
     # print(json.dumps(payload, indent=4, sort_keys=True))
+    msg_text = event.get("text")
     exec_data = {
         "id": event.get("client_msg_id"),
         "user": event.get("user"),
-        "text": event.get("text"),
-        "executed": False,
-        "approved": False
+        "text": msg_text,
+        "executed": False
     }
+    # Set the language of the message
+    
+    if (msg_text != None) and (msg_text != ""):
+        LanguageHandler().detect_language(msg_text)
+
     # print(conversation)
     # check wether or not the message has been written by the bot (we dont have to answer) or if the message is valid
     if event.get('bot_id') is None and event.get('user') is not None and exec_data.get("text") != '' and exec_data.get('id') is not None:
@@ -96,103 +100,32 @@ def handle_request(payload):
             attach_th.start()
         return {"message": "true"}
 
-# this endpoint is used to handle interactive buttons in the ask for confirm flow
-
-
-@app.route("/slack/action-received", methods=["POST"])
-def action_received():
-    data = json.loads(request.form["payload"])
-    # starting a new thread to do the actual processing
-    x = threading.Thread(
-        target=handle_action,
-        args=(data,)
-    )
-    x.start()
-    # we remove the buttons from the message so that the user can't ask for an execution more than once
-    blocks = [{
-        "type": "section",
-                "text": {
-                    "type": "plain_text",
-                    "text": data.get("message").get("blocks")[0].get("text").get("text"),
-                    "emoji": True
-                }
-    }]
-    slack_web_client.chat_update(channel=data.get("channel").get(
-        "id"), ts=data.get("message").get("ts"), blocks=blocks)
-    # send an ACK to slack
-    response = make_response("", 200)
-    response.headers['X-Slack-No-Retry'] = 1
-    return response
-
-
-def handle_action(data):
-    # retrieving basic info about the message received
-    channel = data.get("channel").get("id")
-    user_id = data.get("user").get("id")
-    req_user = slack_web_client.users_info(user=user_id)
-    user = req_user.get('user')
-    action = data.get("actions")[0].get("action_id")
-    message_ts = data.get("message").get("ts")
-    # if the user who clicked the action button is the one who wrote the original message
-    if (user_id == cadocs.asked_user):
-        # if the answer is yes
-        if (action == "action-yes"):
-            # we grab the executions asked by the user
-            users_execs = [
-                x for x in cadocs.conversation_queue if x["user"] == user_id]
-            exec_data = users_execs[len(users_execs)-1]
-            exec_data.update({"approved": True})
-            # we start the cat-gress
-            progress = post_waiting_message(channel)
-            # we run the tool
-            try:
-                response, results, entities, intent = cadocs.new_message(
-                    exec_data, channel, user)
-            except Exception as e:
-                slack_web_client.chat_update(
-                    channel=channel, ts=message_ts, blocks=cadocs.something_wrong(channel).get("blocks"))
-                return {"message": "true"}
-            finally:
-                # we stop the cat-gress
-                progress.do_run = False
-            # since we are sure the message had the right intent, we update the dataset of the NLU in order to be retrained
-            req = requests.get(os.environ.get(
-                'CADOCSNLU_URL_UPDATE', "")+"?message="+exec_data["text"]+"&intent="+intent.value)
-            # update the answer message in chat
-            slack_web_client.chat_postMessage(**response)
-            # we save the execution if the intent was to run csdetector
-            if ((intent == CadocsIntents.GetSmells or intent == CadocsIntents.GetSmellsDate) and results != None):
-                cadocs_utils.save_execution(results, "Community Smell Detection", date.today(
-                ).strftime("%m/%d/%Y"), entities[0], user_id)
-                # we post the pdf attachments
-                attach_th = threading.Thread(
-                    target=post_attachments, args=(channel, intent,))
-                attach_th.start()
-            return {"message": "true"}
-        elif (action == "action-no"):
-            slack_web_client.chat_update(channel=channel, ts=message_ts, blocks=[{
-                "type": "section",
-                "text": {
-                    "type": "plain_text",
-                    "text": "We are sorry, we couldn't detect your intent. \nPlease try again with a more specific question.\n If you need help, check our advices in the CADOCS app information",
-                    "emoji": True
-                }
-            }])
-
 
 def post_waiting_message(channel):
-    # we post the waiting message
+    text=""
+    # create LanguageHandler instance
+    language_handler = LanguageHandler()
+    language = language_handler.get_current_language()
+    # check if the language is english
+    if(language == "en"):
+       text = "We are handling your request..."
+    # check if the language is italian
+    elif(language == "it"):
+       text = "Stiamo elaborando la sua richiesta"
+
+    # we post waiting message
     message = slack_web_client.chat_postMessage(**{
         "channel": channel,
         "blocks": [{
             "type": "section",
             "text": {
                     "type": "plain_text",
-                    "text": "We are handling your request...",
+                    "text": text,
                     "emoji": True
             }
         }]
     })
+
     ts = message.get("ts")
     # we start a thread that tells the user we are running the tool
     progress = threading.Thread(
@@ -201,8 +134,6 @@ def post_waiting_message(channel):
     return progress
 
 # this method will show the cat-gress of the execution by updating itself until the main thread stops
-
-
 def update_waiting_message(channel, ts):
     i = 0
     elapsed_time = 0
@@ -217,12 +148,23 @@ def update_waiting_message(channel, ts):
             emojis = emojis + ":smile_cat:"
         time.sleep(1)
         elapsed_time += 1
+
+        # create LanguageHandler instance
+        language_handler = LanguageHandler()
+        language = language_handler.get_current_language()
+        # check if the language is english
+        if(language == "en"):
+            text = "We are handling your request...\n"
+        # check if the language is italian
+        elif(language == "it"):
+            text = "Stiamo elaborando la sua richiesta...\n"
+
         slack_web_client.chat_update(channel=channel, ts=ts, blocks=[
             {
                 "type": "section",
                         "text": {
                             "type": "plain_text",
-                            "text": "We are handling your request...\n" + emojis + "",
+                            "text": text + emojis + "",
                             "emoji": True
                         }
             }
@@ -301,23 +243,6 @@ def predict():
         return "Error: No message to provide to the model. Please insert a valid message."
     req = requests.get('http://localhost:5000/predict?message='+message)
     resp = req.json()
-    return resp
-
-# forward for the active learning process
-
-
-@app.route('/cadocsNLU/update', methods=['GET'])
-def update_dataset():
-    if 'message' in request.args and 'intent' in request.args:
-        message = str(request.args['message'])
-        intent = str(request.args['intent'])
-    else:
-        return "Error: The past message or intent is incorrect. Please provide the right parameters."
-
-    req = requests.get(
-        "http://localhost:5000/update_dataset?message="+message+"&intent="+intent)
-    resp = req.json()
-
     return resp
 
 
